@@ -16,7 +16,7 @@
     <dependency>
         <groupId>net.dv8tion</groupId>
         <artifactId>JDA</artifactId>
-        <version>$version</version>
+        <version>$5.1.0</version>
     </dependency>
 
 </project>
