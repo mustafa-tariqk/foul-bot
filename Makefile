@@ -3,8 +3,11 @@
 all: tidy build
 
 tidy:
-    go mod tidy
+	go mod tidy
 
 build:
-    go build -o foulbot main.go
-    chmod +x foulbot
+	go build -o foulbot main.go
+	chmod +x foulbot
+
+run: build
+	./foulbot
