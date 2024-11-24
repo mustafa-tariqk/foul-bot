@@ -5,17 +5,20 @@ import (
 	"log"
 	"os"
 	"os/signal"
+	"sort"
 	"syscall"
 
 	"github.com/bwmarrin/discordgo"
 	"github.com/joho/godotenv"
-	_ "github.com/mattn/go-sqlite3"
 )
 
 func main() {
 	godotenv.Load()
-	guildId := os.Getenv("GUILD_ID")
+	guildId := os.Getenv("DISCORD_GUILD_ID")
 	token := os.Getenv("DISCORD_TOKEN")
+	appId := os.Getenv("DISCORD_APPLICATION_ID")
+
+	points := make(map[string]int64)
 
 	bot, err := discordgo.New("Bot " + token)
 	if err != nil {
@@ -69,6 +72,53 @@ func main() {
 
 				// Respond to the interaction
 				s.InteractionRespond(i.Interaction, &interactionResponse)
+
+				// TODO: add to counter ~after~ poll
+				points[user.ID] += number
+			case "leaderboard":
+				type userPoints struct {
+					userID string
+					points int64
+				}
+				pairs := make([]userPoints, 0, len(points))
+				for id, score := range points {
+					pairs = append(pairs, userPoints{id, score})
+				}
+
+				// Sort by points descending
+				sort.Slice(pairs, func(i, j int) bool {
+					return pairs[i].points > pairs[j].points
+				})
+
+				// Get top 10 or all if less
+				if len(pairs) > 10 {
+					pairs = pairs[:10]
+				}
+
+				// Number emojis for ranking
+				numbers := []string{":one:", ":two:", ":three:", ":four:", ":five:", ":six:", ":seven:", ":eight:", ":nine:", ":ten:"}
+
+				description := ""
+				for i, pair := range pairs {
+					user, err := s.User(pair.userID)
+					if err != nil {
+						fmt.Printf("Error fetching user: %v\n", err)
+						continue
+					}
+					description += fmt.Sprintf("%s %s: %d\n", numbers[i], user.Username, pair.points)
+				}
+
+				embed := &discordgo.MessageEmbed{
+					Title:       "Leaderboard",
+					Description: description,
+				}
+
+				s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{
+					Type: discordgo.InteractionResponseChannelMessageWithSource,
+					Data: &discordgo.InteractionResponseData{
+						Embeds: []*discordgo.MessageEmbed{embed},
+					},
+				})
 			}
 		}
 	})
@@ -85,32 +135,41 @@ func main() {
 		log.Fatal(err)
 	}
 
-	_, err = bot.ApplicationCommandCreate(bot.State.User.ID, guildId, &discordgo.ApplicationCommand{
-		Name:        "own",
-		Description: "Displays ownership",
-		Options: []*discordgo.ApplicationCommandOption{
-			{
-				Type:        discordgo.ApplicationCommandOptionUser,
-				Name:        "user",
-				Description: "The user to mention",
-				Required:    true,
-			},
-			{
-				Type:        discordgo.ApplicationCommandOptionInteger,
-				Name:        "number",
-				Description: "An integer value",
-				Required:    true,
-			},
-			{
-				Type:        discordgo.ApplicationCommandOptionString,
-				Name:        "reason",
-				Description: "The reason for gaining",
-				Required:    true,
+	commands := []*discordgo.ApplicationCommand{
+		{
+			Name:        "own",
+			Description: "Displays ownership",
+			Options: []*discordgo.ApplicationCommandOption{
+				{
+					Type:        discordgo.ApplicationCommandOptionUser,
+					Name:        "user",
+					Description: "The user to mention",
+					Required:    true,
+				},
+				{
+					Type:        discordgo.ApplicationCommandOptionInteger,
+					Name:        "number",
+					Description: "An integer value",
+					Required:    true,
+				},
+				{
+					Type:        discordgo.ApplicationCommandOptionString,
+					Name:        "reason",
+					Description: "The reason for gaining",
+					Required:    true,
+				},
 			},
 		},
-	})
+		{
+			Name:        "leaderboard",
+			Description: "Displays the leaderboard",
+			Options:     []*discordgo.ApplicationCommandOption{},
+		},
+	}
+
+	_, err = bot.ApplicationCommandBulkOverwrite(appId, guildId, commands)
 	if err != nil {
-		log.Fatal(err)
+		log.Fatalf("could not register commands: %s", err)
 	}
 
 	fmt.Println("Bot is running")

@@ -2,8 +2,6 @@ module foul-bot
 
 go 1.19
 
-require github.com/mattn/go-sqlite3 v1.14.24
-
 require (
 	github.com/bwmarrin/discordgo v0.28.1
 	github.com/joho/godotenv v1.5.1
