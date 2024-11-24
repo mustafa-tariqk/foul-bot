@@ -24,7 +24,7 @@ var (
 	pollsMutex             sync.RWMutex
 	NUMBERS                = []string{":one:", ":two:", ":three:", ":four:", ":five:", ":six:", ":seven:", ":eight:", ":nine:", ":ten:"}
 	POLLS_JSON             = "polls.json"
-	POLL_LENGTH            = 1 * time.Minute // for testing
+	POLL_LENGTH            = 24 * time.Hour
 )
 
 type VotePoll struct {
@@ -57,7 +57,6 @@ func main() {
 	}
 	defer bot.Close()
 
-	// Handle expired polls after bot connects
 	handleExpiredPolls(bot, points)
 
 	establishCommands(bot, guildId, appId)
@@ -167,7 +166,6 @@ func handleInputs(bot *discordgo.Session, points map[string]int64) {
 				number := options[1].IntValue()
 				reason := options[2].StringValue()
 
-				// Create poll message
 				err := s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{
 					Type: discordgo.InteractionResponseChannelMessageWithSource,
 					Data: &discordgo.InteractionResponseData{
@@ -186,7 +184,6 @@ func handleInputs(bot *discordgo.Session, points map[string]int64) {
 				s.MessageReactionAdd(i.ChannelID, pollMsg.ID, "👍")
 				s.MessageReactionAdd(i.ChannelID, pollMsg.ID, "👎")
 
-				// Create poll
 				poll := &VotePoll{
 					MessageID: pollMsg.ID,
 					ChannelID: i.ChannelID,
@@ -196,7 +193,6 @@ func handleInputs(bot *discordgo.Session, points map[string]int64) {
 					ExpiresAt: time.Now().Add(POLL_LENGTH),
 				}
 
-				// Store poll
 				pollsMutex.Lock()
 				activePolls[pollMsg.ID] = poll
 				savePolls(activePolls)
