@@ -155,7 +155,6 @@ func main() {
 			options := i.ApplicationCommandData().Options
 			switch i.ApplicationCommandData().Name {
 			case "own":
-				// Retrieve the command options
 				user := options[0].UserValue(s)
 				number := options[1].IntValue()
 				reason := options[2].StringValue()
