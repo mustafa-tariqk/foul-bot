@@ -49,7 +49,7 @@ func main() {
 				err := s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{
 					Type: discordgo.InteractionResponseChannelMessageWithSource,
 					Data: &discordgo.InteractionResponseData{
-						Content: fmt.Sprintf("Own giving <@%s> %+d points for: %s\nVoting ends in 1 hour!",
+						Content: fmt.Sprintf("Own giving <@%s> %+d points for %s\nPoll closes in 1 hour",
 							user.ID, number, reason),
 					},
 				})
