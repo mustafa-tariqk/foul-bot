@@ -1,52 +1,52 @@
 package main
 
 import (
-	"database/sql"
 	"fmt"
 	"log"
+	"os"
+	"os/signal"
+	"strings"
+	"syscall"
 
+	"github.com/bwmarrin/discordgo"
+	"github.com/joho/godotenv"
 	_ "github.com/mattn/go-sqlite3"
 )
 
+const prefix string = "!foulbot"
+
 func main() {
-	// Open the database connection
-	db, err := sql.Open("sqlite3", "./points.db")
+	godotenv.Load()
+	bot, err := discordgo.New("Bot " + os.Getenv("DISCORD_TOKEN"))
 	if err != nil {
 		log.Fatal(err)
 	}
-	defer db.Close()
+	bot.AddHandler(func(s *discordgo.Session, m *discordgo.MessageCreate) {
+		if m.Author.ID == s.State.User.ID {
+			return
+		}
 
-	// Create the users table if it doesn't exist
-	createTableSQL := `CREATE TABLE IF NOT EXISTS users (
-        "user" TEXT NOT NULL PRIMARY KEY,
-        "points" INTEGER NOT NULL
-    );`
-	_, err = db.Exec(createTableSQL)
+		args := strings.Split(m.Content, " ")
+
+		if args[0] != prefix {
+			return
+		}
+
+		if args[1] == "ping" {
+			s.ChannelMessageSend(m.ChannelID, "pong")
+		}
+	})
+	bot.Identify.Intents = discordgo.IntentsAllWithoutPrivileged
+
+	err = bot.Open()
 	if err != nil {
 		log.Fatal(err)
 	}
+	defer bot.Close()
 
-	// Example usage
-	addUser(db, "john_doe")
-	addPoints(db, "john_doe", 5)
-}
+	fmt.Println("Bot is running")
 
-// addUser adds a new user to the database with 0 points
-func addUser(db *sql.DB, username string) {
-	insertUserSQL := `INSERT INTO users (user, points) VALUES (?, 0)`
-	_, err := db.Exec(insertUserSQL, username)
-	if err != nil {
-		log.Fatal(err)
-	}
-	fmt.Printf("User %s added successfully\n", username)
-}
-
-// addPoints increments the points for a given user
-func addPoints(db *sql.DB, username string, points int) {
-	updatePointsSQL := `UPDATE users SET points = points + ? WHERE user = ?`
-	_, err := db.Exec(updatePointsSQL, points, username)
-	if err != nil {
-		log.Fatal(err)
-	}
-	fmt.Printf("Added %d points to user %s\n", points, username)
+	sc := make(chan os.Signal, 1)
+	signal.Notify(sc, syscall.SIGINT, syscall.SIGTERM, os.Interrupt)
+	<-sc
 }
