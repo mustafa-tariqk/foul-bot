@@ -111,7 +111,7 @@ func handleInputs(bot *discordgo.Session, points map[string]int64) {
 				err := s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{
 					Type: discordgo.InteractionResponseChannelMessageWithSource,
 					Data: &discordgo.InteractionResponseData{
-						Content: fmt.Sprintf("Own <@%s> %+d points for %s\nPoll closes in 1 hour",
+						Content: fmt.Sprintf("Own <@%s> %+d points for %s\nPoll closes in 24 hours",
 							user.ID, number, reason),
 					},
 				})
@@ -133,7 +133,7 @@ func handleInputs(bot *discordgo.Session, points map[string]int64) {
 					UserID:    user.ID,
 					Points:    number,
 					Reason:    reason,
-					ExpiresAt: time.Now().Add(1 * time.Hour),
+					ExpiresAt: time.Now().Add(24 * time.Hour),
 				}
 
 				// Store poll
@@ -141,7 +141,7 @@ func handleInputs(bot *discordgo.Session, points map[string]int64) {
 				activePolls[pollMsg.ID] = poll
 				pollsMutex.Unlock()
 
-				time.AfterFunc(1*time.Hour, func() {
+				time.AfterFunc(24*time.Hour, func() {
 					concludePoll(s, poll, points)
 				})
 			case "leaderboard":
