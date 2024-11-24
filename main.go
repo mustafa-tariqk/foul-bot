@@ -7,7 +7,9 @@ import (
 	"os"
 	"os/signal"
 	"sort"
+	"sync"
 	"syscall"
+	"time"
 
 	"github.com/bwmarrin/discordgo"
 	"github.com/joho/godotenv"
@@ -18,7 +20,18 @@ var (
 	DISCORD_TOKEN          = "DISCORD_TOKEN"
 	DISCORD_GUILD_ID       = "DISCORD_GUILD_ID"
 	DISCORD_APPLICATION_ID = "DISCORD_APPLICATION_ID"
+	activePolls            = make(map[string]*VotePoll)
+	pollsMutex             sync.RWMutex
 )
+
+type VotePoll struct {
+	MessageID string
+	ChannelID string
+	UserID    string
+	Points    int64
+	Reason    string
+	ExpiresAt time.Time
+}
 
 func loadPoints() map[string]int64 {
 	points := make(map[string]int64)
@@ -147,6 +160,27 @@ func create_leaderboard(points map[string]int64, s *discordgo.Session) *discordg
 	return embed
 }
 
+func concludePoll(s *discordgo.Session, poll *VotePoll, points map[string]int64) {
+	pollsMutex.Lock()
+	delete(activePolls, poll.MessageID)
+	pollsMutex.Unlock()
+
+	// Get reactions
+	upVotes, _ := s.MessageReactions(poll.ChannelID, poll.MessageID, "👍", 100, "", "")
+	downVotes, _ := s.MessageReactions(poll.ChannelID, poll.MessageID, "👎", 100, "", "")
+
+	// Compare votes (excluding bot's reaction)
+	if len(upVotes)-1 > len(downVotes)-1 {
+		points[poll.UserID] += poll.Points
+		savePoints(points)
+		s.ChannelMessageSend(poll.ChannelID,
+			fmt.Sprintf("Poll passed! <@%s> awarded %d points", poll.UserID, poll.Points))
+	} else {
+		s.ChannelMessageSend(poll.ChannelID,
+			fmt.Sprintf("Poll failed. No points awarded to <@%s>", poll.UserID))
+	}
+}
+
 func main() {
 	bot, points, guildId, appId := loadEnv()
 
@@ -159,11 +193,44 @@ func main() {
 				number := options[1].IntValue()
 				reason := options[2].StringValue()
 
-				fmt.Printf("Own <@%s> %+d for %s\n", user.ID, number, reason)
+				// Create poll message
+				err := s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{
+					Type: discordgo.InteractionResponseChannelMessageWithSource,
+					Data: &discordgo.InteractionResponseData{
+						Content: fmt.Sprintf("Vote to award <@%s> %d points for: %s\nVoting ends in 1 hour!",
+							user.ID, number, reason),
+					},
+				})
+				if err != nil {
+					return
+				}
+				pollMsg, err := s.InteractionResponse(i.Interaction)
+				if err != nil {
+					return
+				}
 
-				// TODO: add to counter ~after~ poll
-				points[user.ID] += number
-				savePoints(points)
+				s.MessageReactionAdd(i.ChannelID, pollMsg.ID, "👍")
+				s.MessageReactionAdd(i.ChannelID, pollMsg.ID, "👎")
+
+				// Create poll
+				poll := &VotePoll{
+					MessageID: pollMsg.ID,
+					ChannelID: i.ChannelID,
+					UserID:    user.ID,
+					Points:    number,
+					Reason:    reason,
+					ExpiresAt: time.Now().Add(1 * time.Hour),
+				}
+
+				// Store poll
+				pollsMutex.Lock()
+				activePolls[pollMsg.ID] = poll
+				pollsMutex.Unlock()
+
+				// TODO: set to hour
+				time.AfterFunc(1*time.Minute, func() {
+					concludePoll(s, poll, points)
+				})
 			case "leaderboard":
 				s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{
 					Type: discordgo.InteractionResponseChannelMessageWithSource,
@@ -173,6 +240,19 @@ func main() {
 				})
 			}
 		}
+	})
+
+	bot.AddHandler(func(s *discordgo.Session, r *discordgo.MessageReactionAdd) {
+		pollsMutex.RLock()
+		_, exists := activePolls[r.MessageID]
+		pollsMutex.RUnlock()
+
+		if !exists || r.UserID == s.State.User.ID {
+			return
+		}
+
+		// TODO: removing duplicates?
+
 	})
 
 	err := bot.Open()
