@@ -23,6 +23,8 @@ var (
 	activePolls            = make(map[string]*VotePoll)
 	pollsMutex             sync.RWMutex
 	NUMBERS                = []string{":one:", ":two:", ":three:", ":four:", ":five:", ":six:", ":seven:", ":eight:", ":nine:", ":ten:"}
+	POLLS_JSON             = "polls.json"
+	POLL_LENGTH            = 1 * time.Minute // for testing
 )
 
 type VotePoll struct {
@@ -32,6 +34,10 @@ type VotePoll struct {
 	Points    int64
 	Reason    string
 	ExpiresAt time.Time
+}
+
+type StoredPolls struct {
+	Polls map[string]*VotePoll `json:"polls"`
 }
 
 type userPoints struct {
@@ -50,6 +56,9 @@ func main() {
 		log.Fatal(err)
 	}
 	defer bot.Close()
+
+	// Handle expired polls after bot connects
+	handleExpiredPolls(bot, points)
 
 	establishCommands(bot, guildId, appId)
 	fmt.Println("Bot is running...")
@@ -97,6 +106,57 @@ func loadPoints() map[string]int64 {
 	return points
 }
 
+func loadPolls() map[string]*VotePoll {
+	polls := make(map[string]*VotePoll)
+	if _, err := os.Stat(POLLS_JSON); os.IsNotExist(err) {
+		savePolls(polls)
+		return polls
+	}
+
+	data, err := os.ReadFile(POLLS_JSON)
+	if err != nil {
+		log.Fatalf("could not read polls file: %s", err)
+	}
+
+	var storedPolls StoredPolls
+	if err := json.Unmarshal(data, &storedPolls); err != nil {
+		log.Fatalf("could not unmarshal polls: %s", err)
+	}
+
+	return storedPolls.Polls
+}
+
+func savePolls(polls map[string]*VotePoll) {
+	storedPolls := StoredPolls{Polls: polls}
+	data, err := json.Marshal(storedPolls)
+	if err != nil {
+		log.Fatalf("could not marshal polls: %s", err)
+	}
+	if err := os.WriteFile(POLLS_JSON, data, 0644); err != nil {
+		log.Fatalf("could not write polls file: %s", err)
+	}
+}
+
+func handleExpiredPolls(bot *discordgo.Session, points map[string]int64) {
+	polls := loadPolls()
+	now := time.Now()
+
+	for _, poll := range polls {
+		if now.After(poll.ExpiresAt) {
+			concludePoll(bot, poll, points)
+		} else {
+			pollsMutex.Lock()
+			activePolls[poll.MessageID] = poll
+			pollsMutex.Unlock()
+
+			timeUntilExpiry := time.Until(poll.ExpiresAt)
+			time.AfterFunc(timeUntilExpiry, func() {
+				concludePoll(bot, poll, points)
+			})
+		}
+	}
+}
+
 func handleInputs(bot *discordgo.Session, points map[string]int64) {
 	bot.AddHandler(func(s *discordgo.Session, i *discordgo.InteractionCreate) {
 		if i.Type == discordgo.InteractionApplicationCommand {
@@ -133,15 +193,16 @@ func handleInputs(bot *discordgo.Session, points map[string]int64) {
 					UserID:    user.ID,
 					Points:    number,
 					Reason:    reason,
-					ExpiresAt: time.Now().Add(24 * time.Hour),
+					ExpiresAt: time.Now().Add(POLL_LENGTH),
 				}
 
 				// Store poll
 				pollsMutex.Lock()
 				activePolls[pollMsg.ID] = poll
+				savePolls(activePolls)
 				pollsMutex.Unlock()
 
-				time.AfterFunc(24*time.Hour, func() {
+				time.AfterFunc(POLL_LENGTH, func() {
 					concludePoll(s, poll, points)
 				})
 			case "leaderboard":
@@ -159,6 +220,7 @@ func handleInputs(bot *discordgo.Session, points map[string]int64) {
 func concludePoll(s *discordgo.Session, poll *VotePoll, points map[string]int64) {
 	pollsMutex.Lock()
 	delete(activePolls, poll.MessageID)
+	savePolls(activePolls)
 	pollsMutex.Unlock()
 
 	upVotes, _ := s.MessageReactions(poll.ChannelID, poll.MessageID, "👍", 100, "", "")
@@ -233,7 +295,7 @@ func establishCommands(bot *discordgo.Session, guildId string, appId string) {
 	commands := []*discordgo.ApplicationCommand{
 		{
 			Name:        "own",
-			Description: "Displays ownership",
+			Description: "Accuse someone of gaining",
 			Options: []*discordgo.ApplicationCommandOption{
 				{
 					Type:        discordgo.ApplicationCommandOptionUser,
@@ -257,7 +319,7 @@ func establishCommands(bot *discordgo.Session, guildId string, appId string) {
 		},
 		{
 			Name:        "leaderboard",
-			Description: "Displays the leaderboard",
+			Description: "Displays a top 10 leaderboard",
 			Options:     []*discordgo.ApplicationCommandOption{},
 		},
 	}

@@ -32,9 +32,9 @@ I have been setting the role permissions to `Administrator` mainly because I'm t
 
 ## Installation
 
-1. Clone the repo: `git clone https://github.com/mustafa-tariqk/foul-bot.git`
-2. Create an empty .env: `touch .env`
-3. Fill it with the Guild ID, App ID and Bot Token as follows. Reference below.
+1. Clone the repo
+2. Create an empty `.env` file
+3. Fill it with the Guild ID, App ID and Bot Toke. Reference below.
 4. Run the app with `make run` or `go run .` if not on a unix system.
 
 ## .env
