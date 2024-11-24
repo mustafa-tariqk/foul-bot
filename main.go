@@ -133,7 +133,7 @@ func handleInputs(bot *discordgo.Session, points map[string]int64) {
 					UserID:    user.ID,
 					Points:    number,
 					Reason:    reason,
-					ExpiresAt: time.Now().Add(1 * time.Minute),
+					ExpiresAt: time.Now().Add(1 * time.Hour),
 				}
 
 				// Store poll
@@ -141,7 +141,7 @@ func handleInputs(bot *discordgo.Session, points map[string]int64) {
 				activePolls[pollMsg.ID] = poll
 				pollsMutex.Unlock()
 
-				time.AfterFunc(1*time.Minute, func() {
+				time.AfterFunc(1*time.Hour, func() {
 					concludePoll(s, poll, points)
 				})
 			case "leaderboard":
