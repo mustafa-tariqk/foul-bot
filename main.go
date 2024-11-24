@@ -174,10 +174,10 @@ func concludePoll(s *discordgo.Session, poll *VotePoll, points map[string]int64)
 		points[poll.UserID] += poll.Points
 		savePoints(points)
 		s.ChannelMessageSend(poll.ChannelID,
-			fmt.Sprintf("Poll passed! <@%s> awarded %d points", poll.UserID, poll.Points))
+			fmt.Sprintf("<@%s> gaining %+d points", poll.UserID, poll.Points))
 	} else {
 		s.ChannelMessageSend(poll.ChannelID,
-			fmt.Sprintf("Poll failed. No points awarded to <@%s>", poll.UserID))
+			fmt.Sprintf("<@%s> not gaining", poll.UserID))
 	}
 }
 
@@ -197,7 +197,7 @@ func main() {
 				err := s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{
 					Type: discordgo.InteractionResponseChannelMessageWithSource,
 					Data: &discordgo.InteractionResponseData{
-						Content: fmt.Sprintf("Vote to award <@%s> %d points for: %s\nVoting ends in 1 hour!",
+						Content: fmt.Sprintf("Own giving <@%s> %+d points for: %s\nVoting ends in 1 hour!",
 							user.ID, number, reason),
 					},
 				})
@@ -227,8 +227,7 @@ func main() {
 				activePolls[pollMsg.ID] = poll
 				pollsMutex.Unlock()
 
-				// TODO: set to hour
-				time.AfterFunc(1*time.Minute, func() {
+				time.AfterFunc(1*time.Hour, func() {
 					concludePoll(s, poll, points)
 				})
 			case "leaderboard":
@@ -252,7 +251,6 @@ func main() {
 		}
 
 		// TODO: removing duplicates?
-
 	})
 
 	err := bot.Open()
