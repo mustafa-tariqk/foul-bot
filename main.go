@@ -22,6 +22,7 @@ var (
 	DISCORD_APPLICATION_ID = "DISCORD_APPLICATION_ID"
 	activePolls            = make(map[string]*VotePoll)
 	pollsMutex             sync.RWMutex
+	NUMBERS                = []string{":one:", ":two:", ":three:", ":four:", ":five:", ":six:", ":seven:", ":eight:", ":nine:", ":ten:"}
 )
 
 type VotePoll struct {
@@ -33,77 +34,16 @@ type VotePoll struct {
 	ExpiresAt time.Time
 }
 
+type userPoints struct {
+	userID string
+	points int64
+}
+
 func main() {
 	bot, points, guildId, appId := loadEnv()
 
-	bot.AddHandler(func(s *discordgo.Session, i *discordgo.InteractionCreate) {
-		if i.Type == discordgo.InteractionApplicationCommand {
-			options := i.ApplicationCommandData().Options
-			switch i.ApplicationCommandData().Name {
-			case "own":
-				user := options[0].UserValue(s)
-				number := options[1].IntValue()
-				reason := options[2].StringValue()
-
-				// Create poll message
-				err := s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{
-					Type: discordgo.InteractionResponseChannelMessageWithSource,
-					Data: &discordgo.InteractionResponseData{
-						Content: fmt.Sprintf("Own giving <@%s> %+d points for %s\nPoll closes in 1 hour",
-							user.ID, number, reason),
-					},
-				})
-				if err != nil {
-					return
-				}
-				pollMsg, err := s.InteractionResponse(i.Interaction)
-				if err != nil {
-					return
-				}
-
-				s.MessageReactionAdd(i.ChannelID, pollMsg.ID, "👍")
-				s.MessageReactionAdd(i.ChannelID, pollMsg.ID, "👎")
-
-				// Create poll
-				poll := &VotePoll{
-					MessageID: pollMsg.ID,
-					ChannelID: i.ChannelID,
-					UserID:    user.ID,
-					Points:    number,
-					Reason:    reason,
-					ExpiresAt: time.Now().Add(1 * time.Hour),
-				}
-
-				// Store poll
-				pollsMutex.Lock()
-				activePolls[pollMsg.ID] = poll
-				pollsMutex.Unlock()
-
-				time.AfterFunc(1*time.Hour, func() {
-					concludePoll(s, poll, points)
-				})
-			case "leaderboard":
-				s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{
-					Type: discordgo.InteractionResponseChannelMessageWithSource,
-					Data: &discordgo.InteractionResponseData{
-						Embeds: []*discordgo.MessageEmbed{create_leaderboard(points, s)},
-					},
-				})
-			}
-		}
-	})
-
-	bot.AddHandler(func(s *discordgo.Session, r *discordgo.MessageReactionAdd) {
-		pollsMutex.RLock()
-		_, exists := activePolls[r.MessageID]
-		pollsMutex.RUnlock()
-
-		if !exists || r.UserID == s.State.User.ID {
-			return
-		}
-
-		// TODO: removing duplicates?
-	})
+	handleInputs(bot, points)
+	handlePollsMutex(bot)
 
 	err := bot.Open()
 	if err != nil {
@@ -136,7 +76,6 @@ func loadEnv() (*discordgo.Session, map[string]int64, string, string) {
 
 func loadPoints() map[string]int64 {
 	points := make(map[string]int64)
-
 	if _, err := os.Stat(POINTS_JSON); os.IsNotExist(err) {
 		data, err := json.Marshal(points)
 		if err != nil {
@@ -156,6 +95,138 @@ func loadPoints() map[string]int64 {
 	}
 
 	return points
+}
+
+func handleInputs(bot *discordgo.Session, points map[string]int64) {
+	bot.AddHandler(func(s *discordgo.Session, i *discordgo.InteractionCreate) {
+		if i.Type == discordgo.InteractionApplicationCommand {
+			options := i.ApplicationCommandData().Options
+			switch i.ApplicationCommandData().Name {
+			case "own":
+				user := options[0].UserValue(s)
+				number := options[1].IntValue()
+				reason := options[2].StringValue()
+
+				// Create poll message
+				err := s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{
+					Type: discordgo.InteractionResponseChannelMessageWithSource,
+					Data: &discordgo.InteractionResponseData{
+						Content: fmt.Sprintf("Own <@%s> %+d points for %s\nPoll closes in 1 hour",
+							user.ID, number, reason),
+					},
+				})
+				if err != nil {
+					return
+				}
+				pollMsg, err := s.InteractionResponse(i.Interaction)
+				if err != nil {
+					return
+				}
+
+				s.MessageReactionAdd(i.ChannelID, pollMsg.ID, "👍")
+				s.MessageReactionAdd(i.ChannelID, pollMsg.ID, "👎")
+
+				// Create poll
+				poll := &VotePoll{
+					MessageID: pollMsg.ID,
+					ChannelID: i.ChannelID,
+					UserID:    user.ID,
+					Points:    number,
+					Reason:    reason,
+					ExpiresAt: time.Now().Add(1 * time.Minute),
+				}
+
+				// Store poll
+				pollsMutex.Lock()
+				activePolls[pollMsg.ID] = poll
+				pollsMutex.Unlock()
+
+				time.AfterFunc(1*time.Minute, func() {
+					concludePoll(s, poll, points)
+				})
+			case "leaderboard":
+				s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{
+					Type: discordgo.InteractionResponseChannelMessageWithSource,
+					Data: &discordgo.InteractionResponseData{
+						Embeds: []*discordgo.MessageEmbed{create_leaderboard(points, s)},
+					},
+				})
+			}
+		}
+	})
+}
+
+func concludePoll(s *discordgo.Session, poll *VotePoll, points map[string]int64) {
+	pollsMutex.Lock()
+	delete(activePolls, poll.MessageID)
+	pollsMutex.Unlock()
+
+	upVotes, _ := s.MessageReactions(poll.ChannelID, poll.MessageID, "👍", 100, "", "")
+	downVotes, _ := s.MessageReactions(poll.ChannelID, poll.MessageID, "👎", 100, "", "")
+
+	if len(upVotes) > len(downVotes) {
+		points[poll.UserID] += poll.Points
+		savePoints(points)
+		s.ChannelMessageSend(poll.ChannelID,
+			fmt.Sprintf("<@%s> gaining %+d", poll.UserID, poll.Points))
+	} else {
+		s.ChannelMessageSend(poll.ChannelID,
+			fmt.Sprintf("<@%s> not gaining", poll.UserID))
+	}
+}
+
+func savePoints(points map[string]int64) {
+	data, err := json.Marshal(points)
+	if err != nil {
+		log.Fatalf("could not marshal points: %s", err)
+	}
+	if err := os.WriteFile(POINTS_JSON, data, 0644); err != nil {
+		log.Fatalf("could not write points file: %s", err)
+	}
+}
+
+func create_leaderboard(points map[string]int64, s *discordgo.Session) *discordgo.MessageEmbed {
+	pairs := make([]userPoints, 0, len(points))
+	for id, score := range points {
+		pairs = append(pairs, userPoints{id, score})
+	}
+	sort.Slice(pairs, func(i, j int) bool {
+		return pairs[i].points > pairs[j].points
+	})
+	if len(pairs) > 10 {
+		pairs = pairs[:10]
+	}
+	return create_leaderboard_string(pairs, s)
+}
+
+func create_leaderboard_string(pairs []userPoints, s *discordgo.Session) *discordgo.MessageEmbed {
+	description := ""
+	for i, pair := range pairs {
+		user, err := s.User(pair.userID)
+		if err != nil {
+			log.Fatal(err)
+			continue
+		}
+		description += fmt.Sprintf("%s %s: %d\n", NUMBERS[i], user.Username, pair.points)
+	}
+	return &discordgo.MessageEmbed{
+		Title:       "Leaderboard",
+		Description: description,
+	}
+}
+
+func handlePollsMutex(bot *discordgo.Session) {
+	bot.AddHandler(func(s *discordgo.Session, r *discordgo.MessageReactionAdd) {
+		pollsMutex.RLock()
+		_, exists := activePolls[r.MessageID]
+		pollsMutex.RUnlock()
+
+		if !exists || r.UserID == s.State.User.ID {
+			return
+		}
+
+		// TODO: removing duplicates?
+	})
 }
 
 func establishCommands(bot *discordgo.Session, guildId string, appId string) {
@@ -190,80 +261,9 @@ func establishCommands(bot *discordgo.Session, guildId string, appId string) {
 			Options:     []*discordgo.ApplicationCommandOption{},
 		},
 	}
-
 	_, err := bot.ApplicationCommandBulkOverwrite(appId, guildId, commands)
 	if err != nil {
 		log.Fatalf("could not register commands: %s", err)
 	}
-
 	bot.Identify.Intents = discordgo.IntentsAllWithoutPrivileged
-}
-
-func concludePoll(s *discordgo.Session, poll *VotePoll, points map[string]int64) {
-	pollsMutex.Lock()
-	delete(activePolls, poll.MessageID)
-	pollsMutex.Unlock()
-
-	// Get reactions
-	upVotes, _ := s.MessageReactions(poll.ChannelID, poll.MessageID, "👍", 100, "", "")
-	downVotes, _ := s.MessageReactions(poll.ChannelID, poll.MessageID, "👎", 100, "", "")
-
-	// Compare votes (excluding bot's reaction)
-	if len(upVotes)-1 > len(downVotes)-1 {
-		points[poll.UserID] += poll.Points
-		savePoints(points)
-		s.ChannelMessageSend(poll.ChannelID,
-			fmt.Sprintf("<@%s> gaining %+d points", poll.UserID, poll.Points))
-	} else {
-		s.ChannelMessageSend(poll.ChannelID,
-			fmt.Sprintf("<@%s> not gaining", poll.UserID))
-	}
-}
-
-func savePoints(points map[string]int64) {
-	data, err := json.Marshal(points)
-	if err != nil {
-		log.Fatalf("could not marshal points: %s", err)
-	}
-	if err := os.WriteFile(POINTS_JSON, data, 0644); err != nil {
-		log.Fatalf("could not write points file: %s", err)
-	}
-}
-
-func create_leaderboard(points map[string]int64, s *discordgo.Session) *discordgo.MessageEmbed {
-	type userPoints struct {
-		userID string
-		points int64
-	}
-	pairs := make([]userPoints, 0, len(points))
-	for id, score := range points {
-		pairs = append(pairs, userPoints{id, score})
-	}
-
-	sort.Slice(pairs, func(i, j int) bool {
-		return pairs[i].points > pairs[j].points
-	})
-
-	if len(pairs) > 10 {
-		pairs = pairs[:10]
-	}
-
-	numbers := []string{":one:", ":two:", ":three:", ":four:", ":five:", ":six:", ":seven:", ":eight:", ":nine:", ":ten:"}
-
-	description := ""
-	for i, pair := range pairs {
-		user, err := s.User(pair.userID)
-		if err != nil {
-			fmt.Printf("Error fetching user: %v\n", err)
-			continue
-		}
-		description += fmt.Sprintf("%s %s: %d\n", numbers[i], user.Username, pair.points)
-	}
-
-	embed := &discordgo.MessageEmbed{
-		Title:       "Leaderboard",
-		Description: description,
-	}
-
-	return embed
 }
