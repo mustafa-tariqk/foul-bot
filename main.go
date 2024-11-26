@@ -3,9 +3,12 @@ package main
 import (
 	"encoding/json"
 	"fmt"
+	"io"
 	"log"
+	"net/http"
 	"os"
 	"os/signal"
+	"runtime"
 	"sort"
 	"sync"
 	"syscall"
@@ -217,6 +220,92 @@ func handleInputs(bot *discordgo.Session, points map[string]int64) {
 						Content: fmt.Sprintf("Current version: %s", VERSION),
 					},
 				})
+			case "update":
+				// Respond immediately since the update might take time
+				s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{
+					Type: discordgo.InteractionResponseChannelMessageWithSource,
+					Data: &discordgo.InteractionResponseData{
+						Content: "Attempting to update...",
+					},
+				})
+
+				extension := map[string]string{"windows": ".exe"}[runtime.GOOS]
+
+				// Construct binary name
+				binaryName := fmt.Sprintf("foulbot-%s-%s%s", runtime.GOOS, runtime.GOARCH, extension)
+				downloadURL := fmt.Sprintf("https://github.com/mustafa-tariqk/foul-bot/releases/latest/download/%s", binaryName)
+
+				// Create temporary file
+				tmpFile, err := os.CreateTemp("", "foulbot-*"+extension)
+				if err != nil {
+					s.FollowupMessageCreate(i.Interaction, false, &discordgo.WebhookParams{
+						Content: "Failed to create temporary file: " + err.Error(),
+					})
+					return
+				}
+				defer os.Remove(tmpFile.Name())
+
+				// Download new version
+				resp, err := http.Get(downloadURL)
+				if err != nil {
+					s.FollowupMessageCreate(i.Interaction, false, &discordgo.WebhookParams{
+						Content: "Failed to download update: " + err.Error(),
+					})
+					return
+				}
+				defer resp.Body.Close()
+
+				if resp.StatusCode != http.StatusOK {
+					s.FollowupMessageCreate(i.Interaction, false, &discordgo.WebhookParams{
+						Content: fmt.Sprintf("Failed to download update: HTTP %d", resp.StatusCode),
+					})
+					return
+				}
+
+				// Copy downloaded file to temp file
+				_, err = io.Copy(tmpFile, resp.Body)
+				if err != nil {
+					s.FollowupMessageCreate(i.Interaction, false, &discordgo.WebhookParams{
+						Content: "Failed to save update: " + err.Error(),
+					})
+					return
+				}
+				tmpFile.Close()
+
+				// Make executable
+				err = os.Chmod(tmpFile.Name(), 0755)
+				if err != nil {
+					s.FollowupMessageCreate(i.Interaction, false, &discordgo.WebhookParams{
+						Content: "Failed to make file executable: " + err.Error(),
+					})
+					return
+				}
+
+				// Get current executable path
+				execPath, err := os.Executable()
+				if err != nil {
+					s.FollowupMessageCreate(i.Interaction, false, &discordgo.WebhookParams{
+						Content: "Failed to get current executable path: " + err.Error(),
+					})
+					return
+				}
+
+				// Replace current executable with new version
+				err = os.Rename(tmpFile.Name(), execPath)
+				if err != nil {
+					s.FollowupMessageCreate(i.Interaction, false, &discordgo.WebhookParams{
+						Content: "Failed to replace executable: " + err.Error(),
+					})
+					return
+				}
+
+				s.FollowupMessageCreate(i.Interaction, false, &discordgo.WebhookParams{
+					Content: "Update successful! Restarting bot...",
+				})
+
+				// Restart the application
+				os.Exit(0)
+
 			}
 		}
 	})
@@ -287,12 +376,9 @@ func handlePollsMutex(bot *discordgo.Session) {
 		pollsMutex.RLock()
 		_, exists := activePolls[r.MessageID]
 		pollsMutex.RUnlock()
-
 		if !exists || r.UserID == s.State.User.ID {
 			return
 		}
-
-		// TODO: removing duplicates?
 	})
 }
 
@@ -330,6 +416,11 @@ func establishCommands(bot *discordgo.Session, guildId string, appId string) {
 		{
 			Name:        "version",
 			Description: "Displays the current version",
+			Options:     []*discordgo.ApplicationCommandOption{},
+		},
+		{
+			Name:        "update",
+			Description: "Update the bot to a new version",
 			Options:     []*discordgo.ApplicationCommandOption{},
 		},
 	}
