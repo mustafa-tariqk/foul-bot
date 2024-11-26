@@ -7,6 +7,7 @@ import (
 	"log"
 	"net/http"
 	"os"
+	"os/exec"
 	"os/signal"
 	"runtime"
 	"sort"
@@ -221,7 +222,6 @@ func handleInputs(bot *discordgo.Session, points map[string]int64) {
 					},
 				})
 			case "update":
-				// Respond immediately since the update might take time
 				s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{
 					Type: discordgo.InteractionResponseChannelMessageWithSource,
 					Data: &discordgo.InteractionResponseData{
@@ -231,11 +231,9 @@ func handleInputs(bot *discordgo.Session, points map[string]int64) {
 
 				extension := map[string]string{"windows": ".exe"}[runtime.GOOS]
 
-				// Construct binary name
 				binaryName := fmt.Sprintf("foulbot-%s-%s%s", runtime.GOOS, runtime.GOARCH, extension)
 				downloadURL := fmt.Sprintf("https://github.com/mustafa-tariqk/foul-bot/releases/latest/download/%s", binaryName)
 
-				// Create temporary file
 				tmpFile, err := os.CreateTemp("", "foulbot-*"+extension)
 				if err != nil {
 					s.FollowupMessageCreate(i.Interaction, false, &discordgo.WebhookParams{
@@ -245,7 +243,6 @@ func handleInputs(bot *discordgo.Session, points map[string]int64) {
 				}
 				defer os.Remove(tmpFile.Name())
 
-				// Download new version
 				resp, err := http.Get(downloadURL)
 				if err != nil {
 					s.FollowupMessageCreate(i.Interaction, false, &discordgo.WebhookParams{
@@ -262,7 +259,6 @@ func handleInputs(bot *discordgo.Session, points map[string]int64) {
 					return
 				}
 
-				// Copy downloaded file to temp file
 				_, err = io.Copy(tmpFile, resp.Body)
 				if err != nil {
 					s.FollowupMessageCreate(i.Interaction, false, &discordgo.WebhookParams{
@@ -272,7 +268,6 @@ func handleInputs(bot *discordgo.Session, points map[string]int64) {
 				}
 				tmpFile.Close()
 
-				// Make executable
 				err = os.Chmod(tmpFile.Name(), 0755)
 				if err != nil {
 					s.FollowupMessageCreate(i.Interaction, false, &discordgo.WebhookParams{
@@ -281,7 +276,6 @@ func handleInputs(bot *discordgo.Session, points map[string]int64) {
 					return
 				}
 
-				// Get current executable path
 				execPath, err := os.Executable()
 				if err != nil {
 					s.FollowupMessageCreate(i.Interaction, false, &discordgo.WebhookParams{
@@ -290,7 +284,6 @@ func handleInputs(bot *discordgo.Session, points map[string]int64) {
 					return
 				}
 
-				// Replace current executable with new version
 				err = os.Rename(tmpFile.Name(), execPath)
 				if err != nil {
 					s.FollowupMessageCreate(i.Interaction, false, &discordgo.WebhookParams{
@@ -304,6 +297,16 @@ func handleInputs(bot *discordgo.Session, points map[string]int64) {
 				})
 
 				// Restart the application
+				cmd := exec.Command(os.Args[0], os.Args[1:]...)
+				cmd.Stdout = os.Stdout
+				cmd.Stderr = os.Stderr
+				cmd.Stdin = os.Stdin
+				err = cmd.Start()
+				if err != nil {
+					log.Printf("Failed to restart: %v", err)
+					return
+				}
+				// Exit current process only after ensuring new one started
 				os.Exit(0)
 
 			}

@@ -1,4 +1,4 @@
-VERSION ?= $(shell git describe --tags --abbrev=0 2>/dev/null || echo "v0.1.0")
+VERSION ?= $(shell git describe --tags --abbrev=0 2>/dev/null || echo "v0.1.1")
 NOTES ?= $(VERSION)
 BINARY_NAME=foulbot
 .PHONY: all tidy build
