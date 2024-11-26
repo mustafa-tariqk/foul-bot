@@ -16,16 +16,22 @@ import (
 )
 
 var (
-	POINTS_JSON            = "points.json"
+	VERSION                = "dev"
 	DISCORD_TOKEN          = "DISCORD_TOKEN"
 	DISCORD_GUILD_ID       = "DISCORD_GUILD_ID"
 	DISCORD_APPLICATION_ID = "DISCORD_APPLICATION_ID"
-	activePolls            = make(map[string]*VotePoll)
-	pollsMutex             sync.RWMutex
-	NUMBERS                = []string{":one:", ":two:", ":three:", ":four:", ":five:", ":six:", ":seven:", ":eight:", ":nine:", ":ten:"}
+	POINTS_JSON            = "points.json"
 	POLLS_JSON             = "polls.json"
 	POLL_LENGTH            = 24 * time.Hour
+	pollsMutex             sync.RWMutex
+	activePolls            = make(map[string]*VotePoll)
+	NUMBERS                = []string{":one:", ":two:", ":three:", ":four:", ":five:", ":six:", ":seven:", ":eight:", ":nine:", ":ten:"}
 )
+
+type userPoints struct {
+	userID string
+	points int64
+}
 
 type VotePoll struct {
 	MessageID string
@@ -38,11 +44,6 @@ type VotePoll struct {
 
 type StoredPolls struct {
 	Polls map[string]*VotePoll `json:"polls"`
-}
-
-type userPoints struct {
-	userID string
-	points int64
 }
 
 func main() {
@@ -66,6 +67,7 @@ func main() {
 	sc := make(chan os.Signal, 1)
 	signal.Notify(sc, syscall.SIGINT, syscall.SIGTERM, os.Interrupt)
 	<-sc
+	fmt.Println("Bot is shutting down...")
 }
 
 func loadEnv() (*discordgo.Session, map[string]int64, string, string) {
@@ -208,6 +210,13 @@ func handleInputs(bot *discordgo.Session, points map[string]int64) {
 						Embeds: []*discordgo.MessageEmbed{create_leaderboard(points, s)},
 					},
 				})
+			case "version":
+				s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{
+					Type: discordgo.InteractionResponseChannelMessageWithSource,
+					Data: &discordgo.InteractionResponseData{
+						Content: fmt.Sprintf("Current version: %s", VERSION),
+					},
+				})
 			}
 		}
 	})
@@ -316,6 +325,11 @@ func establishCommands(bot *discordgo.Session, guildId string, appId string) {
 		{
 			Name:        "leaderboard",
 			Description: "Displays a top 10 leaderboard",
+			Options:     []*discordgo.ApplicationCommandOption{},
+		},
+		{
+			Name:        "version",
+			Description: "Displays the current version",
 			Options:     []*discordgo.ApplicationCommandOption{},
 		},
 	}
