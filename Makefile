@@ -26,11 +26,11 @@ tag:
 build-all:
 	GOOS=linux GOARCH=amd64 go build -ldflags "-X main.VERSION=$(VERSION)" -o $(BINARY_NAME)-linux-amd64 main.go
 	GOOS=darwin GOARCH=amd64 go build -ldflags "-X main.VERSION=$(VERSION)" -o $(BINARY_NAME)-darwin-amd64 main.go
-	GOOS=windows GOARCH=amd64 go build -ldflags "-X main.VERSION=$(VERSION)" -o $(BINARY_NAME)-windows-amd64.exe main.go
+	GOOS=windows GOARCH=amd64 go build -ldflags "-X main.VERSION=$(VERSION)" -H=windowsgui -o $(BINARY_NAME)-windows-amd64.exe main.go
 
 	GOOS=linux GOARCH=arm64 go build -ldflags "-X main.VERSION=$(VERSION)" -o $(BINARY_NAME)-linux-arm64 main.go
 	GOOS=darwin GOARCH=arm64 go build -ldflags "-X main.VERSION=$(VERSION)" -o $(BINARY_NAME)-darwin-arm64 main.go
-	GOOS=windows GOARCH=arm64 go build -ldflags "-X main.VERSION=$(VERSION)" -o $(BINARY_NAME)-windows-arm64.exe main.go
+	GOOS=windows GOARCH=arm64 go build -ldflags "-X main.VERSION=$(VERSION)" -H=windowsgui -o $(BINARY_NAME)-windows-arm64.exe main.go
 
 release:
 	@echo "Creating release $(VERSION)..."
