@@ -284,12 +284,49 @@ func handleInputs(bot *discordgo.Session, points map[string]int64) {
 					return
 				}
 
-				err = os.Rename(tmpFile.Name(), execPath)
+				newPath := execPath + ".new"
+				oldPath := execPath + ".old"
+
+				err = os.Rename(tmpFile.Name(), newPath)
+				if err != nil {
+					s.FollowupMessageCreate(i.Interaction, false, &discordgo.WebhookParams{
+						Content: "Failed to create new executable: " + err.Error(),
+					})
+					return
+				}
+
+				err = os.Rename(execPath, oldPath)
+				if err != nil {
+					s.FollowupMessageCreate(i.Interaction, false, &discordgo.WebhookParams{
+						Content: "Failed to rename current executable: " + err.Error(),
+					})
+					return
+				}
+
+				err = os.Rename(newPath, execPath)
 				if err != nil {
 					s.FollowupMessageCreate(i.Interaction, false, &discordgo.WebhookParams{
 						Content: "Failed to replace executable: " + err.Error(),
 					})
 					return
+				}
+
+				if runtime.GOOS != "windows" {
+					err = os.Remove(oldPath)
+					if err != nil {
+						s.FollowupMessageCreate(i.Interaction, false, &discordgo.WebhookParams{
+							Content: "Failed to remove old executable: " + err.Error(),
+						})
+						return
+					}
+				} else {
+					err = os.Chmod(oldPath, 0400) // Hide the old file on Windows
+					if err != nil {
+						s.FollowupMessageCreate(i.Interaction, false, &discordgo.WebhookParams{
+							Content: "Failed to hide old executable: " + err.Error(),
+						})
+						return
+					}
 				}
 
 				s.FollowupMessageCreate(i.Interaction, false, &discordgo.WebhookParams{
