@@ -2,6 +2,10 @@
 
 Me and my friends assign points anytime someone does something "foul." We need a way to track and assign these points to determine who is the "foul sport of the year."
 
+## Use prebuilt
+
+Under the releases tab there are binaries I've made that should cover 99% of people. Just download, run on startup, disable any antivirus stuff for the folder it's in and set up the Discord auth stuff + `.env` file and you'll be all good. You'll be able to skip the software prerequisite and installation steps. You will still need to fill our the `.env` file.
+
 ## Prerequisites
 
 Software:
@@ -19,8 +23,7 @@ Auth:
 Hardware:
 
 * Internet
-* Random computer you can leave on forever
-* (Cloud server also works)
+* Random computer you can leave on forever / as much as you can
 
 ## Discord Specific Setup
 
