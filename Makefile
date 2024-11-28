@@ -18,11 +18,6 @@ run: build
 clean:
 	rm -f $(BINARY_NAME)*
 
-tag:
-	@echo "Creating tag $(VERSION)..."
-	git tag $(VERSION)
-	git push origin $(VERSION)
-
 all:
 	GOOS=linux GOARCH=amd64 go build -gcflags=all="-l -B -C" -ldflags "-w -s -X main.VERSION=$(VERSION)" -o $(BINARY_NAME)-linux-amd64 main.go
 	GOOS=darwin GOARCH=amd64 go build -gcflags=all="-l -B -C" -ldflags "-w -s -X main.VERSION=$(VERSION)" -o $(BINARY_NAME)-darwin-amd64 main.go
@@ -30,7 +25,7 @@ all:
 
 	GOOS=linux GOARCH=arm64 go build -gcflags=all="-l -B -C" -ldflags "-w -s -X main.VERSION=$(VERSION)" -o $(BINARY_NAME)-linux-arm64 main.go
 	GOOS=darwin GOARCH=arm64 go build -gcflags=all="-l -B -C" -ldflags "-w -s -X main.VERSION=$(VERSION)" -o $(BINARY_NAME)-darwin-arm64 main.go
-	GOOS=windows GOARCH=arm64 go build -gcflags=all="-l -B -C" -ldflags "-w -s -H=windowsgui -X main.VERSION=$(VERSION)" -o $(BINARY_NAME)-windows-arm64.exe main.go
+	GOOS=windows GOARCH=arm64 go build -gcflags=all="-l -B -C" -ldflags "-w -s -H windowsgui -X main.VERSION=$(VERSION)" -o $(BINARY_NAME)-windows-arm64.exe main.go
 
 release:
 	@echo "Creating release $(VERSION)..."

@@ -3,7 +3,6 @@ package main
 import (
 	"encoding/json"
 	"fmt"
-	"io"
 	"log"
 	"net/http"
 	"os"
@@ -16,6 +15,7 @@ import (
 	"time"
 
 	"github.com/bwmarrin/discordgo"
+	"github.com/inconshreveable/go-update"
 	"github.com/joho/godotenv"
 )
 
@@ -230,18 +230,8 @@ func handleInputs(bot *discordgo.Session, points map[string]int64) {
 				})
 
 				extension := map[string]string{"windows": ".exe"}[runtime.GOOS]
-
 				binaryName := fmt.Sprintf("foulbot-%s-%s%s", runtime.GOOS, runtime.GOARCH, extension)
 				downloadURL := fmt.Sprintf("https://github.com/mustafa-tariqk/foul-bot/releases/latest/download/%s", binaryName)
-
-				tmpFile, err := os.CreateTemp("", "foulbot-*"+extension)
-				if err != nil {
-					s.FollowupMessageCreate(i.Interaction, false, &discordgo.WebhookParams{
-						Content: "Failed to create temporary file: " + err.Error(),
-					})
-					return
-				}
-				defer os.Remove(tmpFile.Name())
 
 				resp, err := http.Get(downloadURL)
 				if err != nil {
@@ -259,74 +249,12 @@ func handleInputs(bot *discordgo.Session, points map[string]int64) {
 					return
 				}
 
-				_, err = io.Copy(tmpFile, resp.Body)
+				err = update.Apply(resp.Body, update.Options{})
 				if err != nil {
 					s.FollowupMessageCreate(i.Interaction, false, &discordgo.WebhookParams{
-						Content: "Failed to save update: " + err.Error(),
+						Content: "Failed to apply update: " + err.Error(),
 					})
 					return
-				}
-				tmpFile.Close()
-
-				err = os.Chmod(tmpFile.Name(), 0755)
-				if err != nil {
-					s.FollowupMessageCreate(i.Interaction, false, &discordgo.WebhookParams{
-						Content: "Failed to make file executable: " + err.Error(),
-					})
-					return
-				}
-
-				execPath, err := os.Executable()
-				if err != nil {
-					s.FollowupMessageCreate(i.Interaction, false, &discordgo.WebhookParams{
-						Content: "Failed to get current executable path: " + err.Error(),
-					})
-					return
-				}
-
-				newPath := execPath + ".new"
-				oldPath := execPath + ".old"
-
-				err = os.Rename(tmpFile.Name(), newPath)
-				if err != nil {
-					s.FollowupMessageCreate(i.Interaction, false, &discordgo.WebhookParams{
-						Content: "Failed to create new executable: " + err.Error(),
-					})
-					return
-				}
-
-				err = os.Rename(execPath, oldPath)
-				if err != nil {
-					s.FollowupMessageCreate(i.Interaction, false, &discordgo.WebhookParams{
-						Content: "Failed to rename current executable: " + err.Error(),
-					})
-					return
-				}
-
-				err = os.Rename(newPath, execPath)
-				if err != nil {
-					s.FollowupMessageCreate(i.Interaction, false, &discordgo.WebhookParams{
-						Content: "Failed to replace executable: " + err.Error(),
-					})
-					return
-				}
-
-				if runtime.GOOS != "windows" {
-					err = os.Remove(oldPath)
-					if err != nil {
-						s.FollowupMessageCreate(i.Interaction, false, &discordgo.WebhookParams{
-							Content: "Failed to remove old executable: " + err.Error(),
-						})
-						return
-					}
-				} else {
-					err = os.Chmod(oldPath, 0400) // Hide the old file on Windows
-					if err != nil {
-						s.FollowupMessageCreate(i.Interaction, false, &discordgo.WebhookParams{
-							Content: "Failed to hide old executable: " + err.Error(),
-						})
-						return
-					}
 				}
 
 				s.FollowupMessageCreate(i.Interaction, false, &discordgo.WebhookParams{
