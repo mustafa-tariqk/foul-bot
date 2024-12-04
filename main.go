@@ -26,10 +26,10 @@ var (
 	DISCORD_APPLICATION_ID = "DISCORD_APPLICATION_ID"
 	POINTS_JSON            = "points.json"
 	POLLS_JSON             = "polls.json"
-	POLL_LENGTH            = 24 * time.Hour
+	POLL_LENGTH            = 10 * time.Second
 	pollsMutex             sync.RWMutex
 	activePolls            = make(map[string]*VotePoll)
-	NUMBERS                = []string{":one:", ":two:", ":three:", ":four:", ":five:", ":six:", ":seven:", ":eight:", ":nine:", ":ten:"}
+	NUMBERS                = []string{":one:", ":two:", ":three:", ":four:", ":five:"}
 )
 
 type userPoints struct {
@@ -187,8 +187,8 @@ func handleInputs(bot *discordgo.Session, points map[string]int64) {
 					return
 				}
 
-				s.MessageReactionAdd(i.ChannelID, pollMsg.ID, "👍")
-				s.MessageReactionAdd(i.ChannelID, pollMsg.ID, "👎")
+				s.MessageReactionAdd(i.ChannelID, pollMsg.ID, "%F0%9F%91%8D")
+				s.MessageReactionAdd(i.ChannelID, pollMsg.ID, "%F0%9F%91%8E")
 
 				poll := &VotePoll{
 					MessageID: pollMsg.ID,
@@ -285,17 +285,27 @@ func concludePoll(s *discordgo.Session, poll *VotePoll, points map[string]int64)
 	savePolls(activePolls)
 	pollsMutex.Unlock()
 
-	upVotes, _ := s.MessageReactions(poll.ChannelID, poll.MessageID, "👍", 100, "", "")
-	downVotes, _ := s.MessageReactions(poll.ChannelID, poll.MessageID, "👎", 100, "", "")
+	upVotes, _ := s.MessageReactions(poll.ChannelID, poll.MessageID, "%F0%9F%91%8D", 100, "", "")
+	downVotes, _ := s.MessageReactions(poll.ChannelID, poll.MessageID, "%F0%9F%91%8E", 100, "", "")
 
 	if len(upVotes) > len(downVotes) {
 		points[poll.UserID] += poll.Points
 		savePoints(points)
-		s.ChannelMessageSend(poll.ChannelID,
-			fmt.Sprintf("<@%s> gaining %+d", poll.UserID, poll.Points))
+		s.ChannelMessageSendReply(poll.ChannelID,
+			fmt.Sprintf("gaining %+d", poll.Points),
+			&discordgo.MessageReference{
+				MessageID:       poll.MessageID,
+				ChannelID:       poll.ChannelID,
+				FailIfNotExists: new(bool),
+			})
 	} else {
-		s.ChannelMessageSend(poll.ChannelID,
-			fmt.Sprintf("<@%s> not gaining", poll.UserID))
+		s.ChannelMessageSendReply(poll.ChannelID,
+			"not gaining",
+			&discordgo.MessageReference{
+				MessageID:       poll.MessageID,
+				ChannelID:       poll.ChannelID,
+				FailIfNotExists: new(bool),
+			})
 	}
 }
 
@@ -317,8 +327,8 @@ func create_leaderboard(points map[string]int64, s *discordgo.Session) *discordg
 	sort.Slice(pairs, func(i, j int) bool {
 		return pairs[i].points > pairs[j].points
 	})
-	if len(pairs) > 10 {
-		pairs = pairs[:10]
+	if len(pairs) > len(NUMBERS) {
+		pairs = pairs[:len(NUMBERS)]
 	}
 	return create_leaderboard_string(pairs, s)
 }
@@ -378,7 +388,7 @@ func establishCommands(bot *discordgo.Session, guildId string, appId string) {
 		},
 		{
 			Name:        "leaderboard",
-			Description: "Displays a top 10 leaderboard",
+			Description: fmt.Sprintf("Displays a top %d leaderboard", len(NUMBERS)),
 			Options:     []*discordgo.ApplicationCommandOption{},
 		},
 		{

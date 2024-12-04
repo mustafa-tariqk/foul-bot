@@ -3,31 +3,25 @@ NOTES ?= $(VERSION)
 BINARY_NAME=foulbot
 .PHONY: all tidy build
 
-all: tidy build
-
-tidy:
-	go mod tidy
-
 build:
-	go build -ldflags "-X main.VERSION=$(VERSION)" -o $(BINARY_NAME) main.go
-	chmod +x $(BINARY_NAME)
-
-run: build
-	./$(BINARY_NAME)
-
-clean:
-	rm -f $(BINARY_NAME)*
-
-all:
+	go mod tidy
 	GOOS=linux GOARCH=amd64 go build -gcflags=all="-l -B -C" -ldflags "-w -s -X main.VERSION=$(VERSION)" -o $(BINARY_NAME)-linux-amd64 main.go
 	GOOS=darwin GOARCH=amd64 go build -gcflags=all="-l -B -C" -ldflags "-w -s -X main.VERSION=$(VERSION)" -o $(BINARY_NAME)-darwin-amd64 main.go
 	GOOS=windows GOARCH=amd64 go build -gcflags=all="-l -B -C" -ldflags "-w -s -H windowsgui -X main.VERSION=$(VERSION)" -o $(BINARY_NAME)-windows-amd64.exe main.go
-
 	GOOS=linux GOARCH=arm64 go build -gcflags=all="-l -B -C" -ldflags "-w -s -X main.VERSION=$(VERSION)" -o $(BINARY_NAME)-linux-arm64 main.go
 	GOOS=darwin GOARCH=arm64 go build -gcflags=all="-l -B -C" -ldflags "-w -s -X main.VERSION=$(VERSION)" -o $(BINARY_NAME)-darwin-arm64 main.go
 	GOOS=windows GOARCH=arm64 go build -gcflags=all="-l -B -C" -ldflags "-w -s -H windowsgui -X main.VERSION=$(VERSION)" -o $(BINARY_NAME)-windows-arm64.exe main.go
 
-release:
+run: build
+	OS=$$(uname -s | tr '[:upper:]' '[:lower:]') ; \
+	ARCH=$$(uname -m) ; \
+	EXTENSION=$$(if [ $$OS = "windows" ]; then echo ".exe"; fi) ; \
+	./$(BINARY_NAME)-$$OS-$$ARCH$$EXTENSION
+
+clean:
+	rm -f $(BINARY_NAME)*
+
+release: build
 	@echo "Creating release $(VERSION)..."
 	@gh release create $(VERSION) \
 		$(BINARY_NAME)-linux-amd64 \
