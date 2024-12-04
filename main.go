@@ -10,6 +10,7 @@ import (
 	"os/signal"
 	"runtime"
 	"sort"
+	"strconv"
 	"sync"
 	"syscall"
 	"time"
@@ -261,6 +262,8 @@ func handleInputs(bot *discordgo.Session, points map[string]int64) {
 					Content: "Update successful! Restarting bot...",
 				})
 
+				run_migrations()
+
 				// Restart the application
 				cmd := exec.Command(os.Args[0], os.Args[1:]...)
 				cmd.Stdout = os.Stdout
@@ -407,4 +410,30 @@ func establishCommands(bot *discordgo.Session, guildId string, appId string) {
 		log.Fatalf("could not register commands: %s", err)
 	}
 	bot.Identify.Intents = discordgo.IntentsAllWithoutPrivileged
+}
+
+func run_migrations() {
+	if VERSION <= "v0.1.4" {
+		envToJson()
+	}
+}
+
+func envToJson() {
+	botID, err := strconv.ParseInt(os.Getenv(DISCORD_APPLICATION_ID), 10, 64)
+	if err != nil {
+		log.Fatalf("could not parse bot ID: %s", err)
+	}
+	env := map[string]interface{}{
+		DISCORD_TOKEN:          os.Getenv(DISCORD_TOKEN),
+		DISCORD_GUILD_ID:       os.Getenv(DISCORD_GUILD_ID),
+		DISCORD_APPLICATION_ID: os.Getenv(DISCORD_APPLICATION_ID),
+		"BANNED_ACCOUNTS":      []int64{botID},
+	}
+	data, err := json.MarshalIndent(env, "", "    ")
+	if err != nil {
+		log.Fatalf("could not marshal env: %s", err)
+	}
+	if err := os.WriteFile("config.json", data, 0644); err != nil {
+		log.Fatalf("could not write env file: %s", err)
+	}
 }
