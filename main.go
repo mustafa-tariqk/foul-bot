@@ -134,7 +134,7 @@ func loadPolls() map[string]*VotePoll {
 
 func savePolls(polls map[string]*VotePoll) {
 	storedPolls := StoredPolls{Polls: polls}
-	data, err := json.Marshal(storedPolls)
+	data, err := json.MarshalIndent(storedPolls, "", "    ")
 	if err != nil {
 		log.Fatalf("could not marshal polls: %s", err)
 	}
@@ -313,7 +313,7 @@ func concludePoll(s *discordgo.Session, poll *VotePoll, points map[string]int64)
 }
 
 func savePoints(points map[string]int64) {
-	data, err := json.Marshal(points)
+	data, err := json.MarshalIndent(points, "", "    ")
 	if err != nil {
 		log.Fatalf("could not marshal points: %s", err)
 	}
