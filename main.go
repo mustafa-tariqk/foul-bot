@@ -27,7 +27,7 @@ var (
 	DISCORD_APPLICATION_ID = "DISCORD_APPLICATION_ID"
 	POINTS_JSON            = "points.json"
 	POLLS_JSON             = "polls.json"
-	POLL_LENGTH            = 10 * time.Second
+	POLL_LENGTH            = 24 * time.Hour
 	pollsMutex             sync.RWMutex
 	activePolls            = make(map[string]*VotePoll)
 	NUMBERS                = []string{":one:", ":two:", ":three:", ":four:", ":five:"}
