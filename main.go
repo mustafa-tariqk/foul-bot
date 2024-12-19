@@ -30,7 +30,7 @@ var (
 	POLL_LENGTH            = 24 * time.Hour
 	pollsMutex             sync.RWMutex
 	activePolls            = make(map[string]*VotePoll)
-	NUMBERS                = []string{":one:", ":two:", ":three:", ":four:", ":five:"}
+	NUMBERS                = []string{":one:", ":two:", ":three:", ":four:", ":five:", ":six:", ":seven:", ":eight:", ":nine:", ":ten:"}
 )
 
 type userPoints struct {
