@@ -176,7 +176,7 @@ func handleInputs(bot *discordgo.Session, points map[string]int64) {
 				err := s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{
 					Type: discordgo.InteractionResponseChannelMessageWithSource,
 					Data: &discordgo.InteractionResponseData{
-						Content: fmt.Sprintf("Own <@%s> %+d points for %s\nPoll closes in 24 hours",
+						Content: fmt.Sprintf("Own <@%s> %+d points for %s",
 							user.ID, number, reason),
 					},
 				})
