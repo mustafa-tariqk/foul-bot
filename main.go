@@ -10,7 +10,6 @@ import (
 	"os/signal"
 	"runtime"
 	"sort"
-	"strconv"
 	"sync"
 	"syscall"
 	"time"
@@ -413,21 +412,16 @@ func establishCommands(bot *discordgo.Session, guildId string, appId string) {
 }
 
 func run_migrations() {
-	if VERSION <= "v0.1.4" {
+	if VERSION <= "v0.2" {
 		envToJson()
 	}
 }
 
 func envToJson() {
-	botID, err := strconv.ParseInt(os.Getenv(DISCORD_APPLICATION_ID), 10, 64)
-	if err != nil {
-		log.Fatalf("could not parse bot ID: %s", err)
-	}
 	env := map[string]interface{}{
 		DISCORD_TOKEN:          os.Getenv(DISCORD_TOKEN),
 		DISCORD_GUILD_ID:       os.Getenv(DISCORD_GUILD_ID),
 		DISCORD_APPLICATION_ID: os.Getenv(DISCORD_APPLICATION_ID),
-		"BANNED_ACCOUNTS":      []int64{botID},
 	}
 	data, err := json.MarshalIndent(env, "", "    ")
 	if err != nil {
