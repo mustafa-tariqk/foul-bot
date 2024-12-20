@@ -16,16 +16,16 @@ import (
 
 	"github.com/bwmarrin/discordgo"
 	"github.com/inconshreveable/go-update"
-	"github.com/joho/godotenv"
 )
 
 var (
-	VERSION                = "dev"
+	VERSION                = "v0.1"
 	DISCORD_TOKEN          = "DISCORD_TOKEN"
 	DISCORD_GUILD_ID       = "DISCORD_GUILD_ID"
 	DISCORD_APPLICATION_ID = "DISCORD_APPLICATION_ID"
 	POINTS_JSON            = "points.json"
 	POLLS_JSON             = "polls.json"
+	CONFIG_JSON            = "config.json"
 	POLL_LENGTH            = 24 * time.Hour
 	pollsMutex             sync.RWMutex
 	activePolls            = make(map[string]*VotePoll)
@@ -48,6 +48,12 @@ type VotePoll struct {
 
 type StoredPolls struct {
 	Polls map[string]*VotePoll `json:"polls"`
+}
+
+type Config struct {
+	DiscordToken   string `json:"discord_token"`
+	DiscordGuildID string `json:"discord_guild_id"`
+	DiscordAppID   string `json:"discord_application_id"`
 }
 
 func main() {
@@ -75,17 +81,23 @@ func main() {
 }
 
 func loadEnv() (*discordgo.Session, map[string]int64, string, string) {
-	godotenv.Load()
-	bot, err := discordgo.New("Bot " + os.Getenv(DISCORD_TOKEN))
+	configData, err := os.ReadFile(CONFIG_JSON)
+	if err != nil {
+		log.Fatalf("could not read config file: %s", err)
+	}
+
+	var config Config
+	if err := json.Unmarshal(configData, &config); err != nil {
+		log.Fatalf("could not parse config file: %s", err)
+	}
+
+	bot, err := discordgo.New("Bot " + config.DiscordToken)
 	if err != nil {
 		log.Fatal(err)
 	}
 	points := loadPoints()
 
-	guildId := os.Getenv(DISCORD_GUILD_ID)
-	appId := os.Getenv(DISCORD_APPLICATION_ID)
-
-	return bot, points, guildId, appId
+	return bot, points, config.DiscordGuildID, config.DiscordAppID
 }
 
 func loadPoints() map[string]int64 {
@@ -412,22 +424,5 @@ func establishCommands(bot *discordgo.Session, guildId string, appId string) {
 }
 
 func run_migrations() {
-	if VERSION <= "v0.2" {
-		envToJson()
-	}
-}
-
-func envToJson() {
-	env := map[string]interface{}{
-		DISCORD_TOKEN:          os.Getenv(DISCORD_TOKEN),
-		DISCORD_GUILD_ID:       os.Getenv(DISCORD_GUILD_ID),
-		DISCORD_APPLICATION_ID: os.Getenv(DISCORD_APPLICATION_ID),
-	}
-	data, err := json.MarshalIndent(env, "", "    ")
-	if err != nil {
-		log.Fatalf("could not marshal env: %s", err)
-	}
-	if err := os.WriteFile("config.json", data, 0644); err != nil {
-		log.Fatalf("could not write env file: %s", err)
-	}
+	// No migrations yet
 }
