@@ -287,7 +287,51 @@ func handleInputs(bot *discordgo.Session, points map[string]int64) {
 				}
 				// Exit current process only after ensuring new one started
 				os.Exit(0)
+			case "logs":
+				pointsFile, err := os.Open(POINTS_JSON)
+				if err != nil {
+					s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{
+						Type: discordgo.InteractionResponseChannelMessageWithSource,
+						Data: &discordgo.InteractionResponseData{
+							Content: fmt.Sprintf("Failed to open points.json: %s", err),
+						},
+					})
+					return
+				}
+				defer pointsFile.Close()
 
+				pollsFile, err := os.Open(POLLS_JSON)
+				if err != nil {
+					s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{
+						Type: discordgo.InteractionResponseChannelMessageWithSource,
+						Data: &discordgo.InteractionResponseData{
+							Content: fmt.Sprintf("Failed to open polls.json: %s", err),
+						},
+					})
+					return
+				}
+				defer pollsFile.Close()
+
+				s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{
+					Type: discordgo.InteractionResponseDeferredChannelMessageWithSource,
+				})
+
+				_, err = s.FollowupMessageCreate(i.Interaction, false, &discordgo.WebhookParams{
+					Content: "Here are the points.json and polls.json files:",
+					Files: []*discordgo.File{
+						{
+							Name:   "points.json",
+							Reader: pointsFile,
+						},
+						{
+							Name:   "polls.json",
+							Reader: pollsFile,
+						},
+					},
+				})
+				if err != nil {
+					log.Printf("Failed to upload points.json and polls.json: %v", err)
+				}
 			}
 		}
 	})
@@ -413,6 +457,11 @@ func establishCommands(bot *discordgo.Session, guildId string, appId string) {
 		{
 			Name:        "update",
 			Description: "Update the bot to a new version",
+			Options:     []*discordgo.ApplicationCommandOption{},
+		},
+		{
+			Name:        "logs",
+			Description: "Uploads files importing for debugging",
 			Options:     []*discordgo.ApplicationCommandOption{},
 		},
 	}
