@@ -26,3 +26,8 @@ func init() {
 		log.Fatal(err)
 	}
 }
+
+func makeTables() {
+    db.Exec(`
+        `, args ...any)
+}
