@@ -184,13 +184,43 @@ func handleInputs(bot *discordgo.Session, points map[string]int64) {
 				number := options[1].IntValue()
 				reason := options[2].StringValue()
 
+				if number == 0 {
+					s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{
+						Type: discordgo.InteractionResponseChannelMessageWithSource,
+						Data: &discordgo.InteractionResponseData{
+							Content: "Can't give out 0 points",
+							Flags:   discordgo.MessageFlagsEphemeral,
+						},
+					})
+					return
+				}
+
 				err := s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{
 					Type: discordgo.InteractionResponseChannelMessageWithSource,
 					Data: &discordgo.InteractionResponseData{
-						Content: fmt.Sprintf("Own <@%s> %+d points for %s",
-							user.ID, number, reason),
-					},
-				})
+						Embeds: []*discordgo.MessageEmbed{
+							{
+								Fields: []*discordgo.MessageEmbedField{
+									{
+										Name:   "User",
+										Value:  fmt.Sprintf("<@%s>", user.ID),
+										Inline: true,
+									},
+									{
+										Name:   "Points",
+										Value:  fmt.Sprintf("%+d", number),
+										Inline: true,
+									},
+									{
+										Name:   "Reason",
+										Value:  reason,
+										Inline: false,
+									},
+								},
+								Timestamp: time.Now().Format(time.RFC3339),
+							},
+						},
+					}})
 				if err != nil {
 					return
 				}
