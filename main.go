@@ -19,7 +19,7 @@ import (
 )
 
 var (
-	VERSION                = "v0.1"
+	VERSION                string
 	DISCORD_TOKEN          = "DISCORD_TOKEN"
 	DISCORD_GUILD_ID       = "DISCORD_GUILD_ID"
 	DISCORD_APPLICATION_ID = "DISCORD_APPLICATION_ID"
@@ -231,6 +231,7 @@ func handleInputs(bot *discordgo.Session, points map[string]int64) {
 					Type: discordgo.InteractionResponseChannelMessageWithSource,
 					Data: &discordgo.InteractionResponseData{
 						Content: fmt.Sprintf("Current version: %s", VERSION),
+						Flags:   discordgo.MessageFlagsEphemeral,
 					},
 				})
 			case "update":
@@ -238,6 +239,7 @@ func handleInputs(bot *discordgo.Session, points map[string]int64) {
 					Type: discordgo.InteractionResponseChannelMessageWithSource,
 					Data: &discordgo.InteractionResponseData{
 						Content: "Attempting to update...",
+						Flags:   discordgo.MessageFlagsEphemeral,
 					},
 				})
 
@@ -249,6 +251,7 @@ func handleInputs(bot *discordgo.Session, points map[string]int64) {
 				if err != nil {
 					s.FollowupMessageCreate(i.Interaction, false, &discordgo.WebhookParams{
 						Content: "Failed to download update: " + err.Error(),
+						Flags:   discordgo.MessageFlagsEphemeral,
 					})
 					return
 				}
@@ -257,6 +260,7 @@ func handleInputs(bot *discordgo.Session, points map[string]int64) {
 				if resp.StatusCode != http.StatusOK {
 					s.FollowupMessageCreate(i.Interaction, false, &discordgo.WebhookParams{
 						Content: fmt.Sprintf("Failed to download update: HTTP %d", resp.StatusCode),
+						Flags:   discordgo.MessageFlagsEphemeral,
 					})
 					return
 				}
@@ -265,12 +269,14 @@ func handleInputs(bot *discordgo.Session, points map[string]int64) {
 				if err != nil {
 					s.FollowupMessageCreate(i.Interaction, false, &discordgo.WebhookParams{
 						Content: "Failed to apply update: " + err.Error(),
+						Flags:   discordgo.MessageFlagsEphemeral,
 					})
 					return
 				}
 
 				s.FollowupMessageCreate(i.Interaction, false, &discordgo.WebhookParams{
 					Content: "Update successful! Restarting bot...",
+					Flags:   discordgo.MessageFlagsEphemeral,
 				})
 
 				run_migrations()
@@ -314,6 +320,9 @@ func handleInputs(bot *discordgo.Session, points map[string]int64) {
 
 				s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{
 					Type: discordgo.InteractionResponseDeferredChannelMessageWithSource,
+					Data: &discordgo.InteractionResponseData{
+						Flags: discordgo.MessageFlagsEphemeral,
+					},
 				})
 
 				_, err = s.FollowupMessageCreate(i.Interaction, false, &discordgo.WebhookParams{
