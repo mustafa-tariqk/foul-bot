@@ -3,6 +3,7 @@ package main
 import (
 	"encoding/json"
 	"fmt"
+	"foulbot/dao"
 	"log"
 	"net/http"
 	"os"
@@ -97,6 +98,7 @@ func loadEnv() (*discordgo.Session, map[string]int64, string, string) {
 		log.Fatal(err)
 	}
 	points := loadPoints()
+	dao.MakeTables()
 
 	return bot, points, config.DiscordGuildID, config.DiscordAppID
 }
@@ -298,7 +300,7 @@ func handleInputs(bot *discordgo.Session, points map[string]int64) {
 
 				extension := map[string]string{"windows": ".exe"}[runtime.GOOS]
 				binaryName := fmt.Sprintf("foulbot-%s-%s%s", runtime.GOOS, runtime.GOARCH, extension)
-				downloadURL := fmt.Sprintf("https://github.com/mustafa-tariqk/foul-bot/releases/latest/download/%s", binaryName)
+				downloadURL := fmt.Sprintf("https://github.com/mustafa-tariqk/foulbot/releases/latest/download/%s", binaryName)
 
 				resp, err := http.Get(downloadURL)
 				if err != nil {
@@ -419,7 +421,7 @@ func concludePoll(s *discordgo.Session, poll *VotePoll, points map[string]int64)
 
 	embed := &discordgo.MessageEmbed{
 		Title: "Poll Result",
-		Color: 0x11806A,
+		Color: 0x57F287,
 		Fields: []*discordgo.MessageEmbedField{
 			{
 				Name:   "Creator",
@@ -451,7 +453,7 @@ func concludePoll(s *discordgo.Session, poll *VotePoll, points map[string]int64)
 	}
 
 	if result == "Failed" {
-		embed.Color = 0xE74C3C // Red color for failed
+		embed.Color = 0xED4245 // Red color for failed
 	}
 
 	s.ChannelMessageSendEmbed(poll.ChannelID, embed)
