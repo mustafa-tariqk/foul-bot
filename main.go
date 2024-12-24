@@ -41,6 +41,7 @@ type VotePoll struct {
 	MessageID string
 	ChannelID string
 	UserID    string
+	CreatorID string
 	Points    int64
 	Reason    string
 	ExpiresAt time.Time
@@ -140,6 +141,15 @@ func loadPolls() map[string]*VotePoll {
 		log.Fatalf("could not unmarshal polls: %s", err)
 	}
 
+	// Set default values for missing parameters
+	for id, poll := range storedPolls.Polls {
+		if poll.CreatorID == "" {
+			poll.CreatorID = "" // Set a default creator ID
+		}
+		// Add more default value checks as needed
+		storedPolls.Polls[id] = poll
+	}
+
 	return storedPolls.Polls
 }
 
@@ -195,38 +205,50 @@ func handleInputs(bot *discordgo.Session, points map[string]int64) {
 					return
 				}
 
-				err := s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{
+				s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{
 					Type: discordgo.InteractionResponseChannelMessageWithSource,
 					Data: &discordgo.InteractionResponseData{
-						Embeds: []*discordgo.MessageEmbed{
-							{
-								Fields: []*discordgo.MessageEmbedField{
-									{
-										Name:   "User",
-										Value:  fmt.Sprintf("<@%s>", user.ID),
-										Inline: true,
-									},
-									{
-										Name:   "Points",
-										Value:  fmt.Sprintf("%+d", number),
-										Inline: true,
-									},
-									{
-										Name:   "Reason",
-										Value:  reason,
-										Inline: false,
-									},
+						Content: "Creating poll...",
+						Flags:   discordgo.MessageFlagsEphemeral,
+					},
+				})
+
+				pollMsg, err := s.ChannelMessageSendComplex(i.ChannelID, &discordgo.MessageSend{
+					Embeds: []*discordgo.MessageEmbed{
+						{
+							Title: "Own",
+							Fields: []*discordgo.MessageEmbedField{
+								{
+									Name:   "User",
+									Value:  fmt.Sprintf("<@%s>", user.ID),
+									Inline: true,
 								},
-								Timestamp: time.Now().Format(time.RFC3339),
+								{
+									Name:   "Points",
+									Value:  fmt.Sprintf("%+d", number),
+									Inline: true,
+								},
+								{
+									Name:   "Reason",
+									Value:  reason,
+									Inline: false,
+								},
 							},
+							Timestamp: time.Now().Format(time.RFC3339),
 						},
-					}})
+					},
+				})
 				if err != nil {
 					return
 				}
-				pollMsg, err := s.InteractionResponse(i.Interaction)
+
+				_, err = s.MessageThreadStartComplex(pollMsg.ChannelID, pollMsg.ID, &discordgo.ThreadStart{
+					Name:                reason,
+					AutoArchiveDuration: 60,
+				})
+
 				if err != nil {
-					return
+					log.Printf("Failed to create thread: %v", err)
 				}
 
 				s.MessageReactionAdd(i.ChannelID, pollMsg.ID, "%F0%9F%91%8D")
@@ -236,6 +258,7 @@ func handleInputs(bot *discordgo.Session, points map[string]int64) {
 					MessageID: pollMsg.ID,
 					ChannelID: i.ChannelID,
 					UserID:    user.ID,
+					CreatorID: i.Member.User.ID,
 					Points:    number,
 					Reason:    reason,
 					ExpiresAt: time.Now().Add(POLL_LENGTH),
@@ -385,25 +408,53 @@ func concludePoll(s *discordgo.Session, poll *VotePoll, points map[string]int64)
 	upVotes, _ := s.MessageReactions(poll.ChannelID, poll.MessageID, "%F0%9F%91%8D", 100, "", "")
 	downVotes, _ := s.MessageReactions(poll.ChannelID, poll.MessageID, "%F0%9F%91%8E", 100, "", "")
 
+	result := "Failed"
 	if len(upVotes) > len(downVotes) {
 		points[poll.UserID] += poll.Points
 		savePoints(points)
-		s.ChannelMessageSendReply(poll.ChannelID,
-			fmt.Sprintf("gaining %+d", poll.Points),
-			&discordgo.MessageReference{
-				MessageID:       poll.MessageID,
-				ChannelID:       poll.ChannelID,
-				FailIfNotExists: new(bool),
-			})
-	} else {
-		s.ChannelMessageSendReply(poll.ChannelID,
-			"not gaining",
-			&discordgo.MessageReference{
-				MessageID:       poll.MessageID,
-				ChannelID:       poll.ChannelID,
-				FailIfNotExists: new(bool),
-			})
+		result = "Passed"
 	}
+
+	messageLink := fmt.Sprintf("https://discord.com/channels/%s/%s/%s", s.State.Guilds[0].ID, poll.ChannelID, poll.MessageID)
+
+	embed := &discordgo.MessageEmbed{
+		Title: "Poll Result",
+		Color: 0x11806A,
+		Fields: []*discordgo.MessageEmbedField{
+			{
+				Name:   "Creator",
+				Value:  fmt.Sprintf("<@%s>", poll.CreatorID),
+				Inline: true,
+			},
+			{
+				Name:   "Gainer",
+				Value:  fmt.Sprintf("<@%s>", poll.UserID),
+				Inline: true,
+			},
+			{
+				Name:   "Points",
+				Value:  fmt.Sprintf("%+d", poll.Points),
+				Inline: true,
+			},
+			{
+				Name:   "Reason",
+				Value:  fmt.Sprintf("[%s](%s)", poll.Reason, messageLink),
+				Inline: false,
+			},
+			{
+				Name:   "Result",
+				Value:  result,
+				Inline: false,
+			},
+		},
+		Timestamp: time.Now().Format(time.RFC3339),
+	}
+
+	if result == "Failed" {
+		embed.Color = 0xE74C3C // Red color for failed
+	}
+
+	s.ChannelMessageSendEmbed(poll.ChannelID, embed)
 }
 
 func savePoints(points map[string]int64) {
